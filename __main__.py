@@ -1,4 +1,4 @@
-import logging, os, math
+import logging, os, math, re
 from os import getenv
 from sqlalchemy import create_engine
 from pymongo import MongoClient, UpdateOne
@@ -7,18 +7,36 @@ from time import sleep
 from datetime import datetime
 from itertools import islice, takewhile, count
 
-log_level = getattr(logging, os.environ.get('LOG_LEVEL', 'INFO').upper())
 logging.basicConfig(level = logging.DEBUG)
+
+class FutureException(Exception):
+    pass
 
 def chunk(n, it):
     src = iter(it)
     return takewhile(bool, (list(islice(src, n)) for _ in count(0)))
 
+def get_service_date(entry):
+    report_date = entry['Report_Date']
+    date = entry['Service_Date']
+    date = re.sub(r'[^\d]+', '.', date)
+    date = re.sub(r'^[^\d]', '', date)
+    try:
+        date = datetime.strptime(date, '%d.%m.%Y')
+        if date > report_date:
+            raise FutureException('Service date in future: {}'.format(date))
+    except Exception as e:
+        logging.error(e)
+        date = report_date
+    return date
+
 def prepare_entry(entry):
+    service_date = get_service_date(entry)
+
     return {
         'timestamp': entry['Report_Date'],
         'code': entry['Service_Code'],
-        'serviceDate': entry['Service_Date'],
+        'serviceDate': service_date,
         'workerPhone': entry['Sender_Phone_Number'],
         'patientPhone': entry['Patient_Phone_Number'],
         'patientName': entry['Patient_Name'],
