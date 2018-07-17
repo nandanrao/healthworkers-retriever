@@ -70,16 +70,19 @@ def write(i=2):
     table = mysql_deets['table']
 
     # Get date of the latest message in our DB
-    fr = get_from(collection)
+    fr = getenv('DATE_FROM_OVERRIDE') or get_from(collection)
 
     # Get messages from Orange DB
     logging.debug('RETRIEVER: Getting messages since {}'.format(fr))
-    query = 'SELECT * FROM {table} WHERE Report_Date > "{fr}"'.format(table=table, fr=fr)
+
+    query = 'SELECT * FROM {table} WHERE Report_Date > "{fr}" ORDER BY Report_Date'.format(table=table, fr=fr)
+
     results = engine.execute(query)
     results = (dict(zip(r.keys(), r.values())) for r in results)
 
     # Write it all to Mongo
     num = write_results(collection, results)
+    results.close()
     logging.debug('RETRIEVER: finished writing {} messages'.format(num))
 
 if __name__ == '__main__':
