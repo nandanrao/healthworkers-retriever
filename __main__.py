@@ -16,22 +16,25 @@ def chunk(n, it):
     src = iter(it)
     return takewhile(bool, (list(islice(src, n)) for _ in count(0)))
 
+def bulk_upsert(coll, records, chunk_size, checked_keys):
+    chunked = chunk(chunk_size, records)
+    i = 0
+    for c in chunked:
+        requests = [ UpdateOne({ k: obj[k] for k in checked_keys},
+                               { '$setOnInsert': obj },
+                               upsert=True) for obj in c ]
+        i += len(requests)
+        coll.bulk_write(requests, ordered=False)
+    return i
+
 def write_results(coll, results):
-    chunked = chunk(500, results)
     checked_keys = ['Sender_Phone_Number',
                     'Patient_Phone_Number',
                     'Patient_Name',
                     'Report_Date',
                     'Service_Code']
-    i = 0
-    for c in chunked:
-        requests = [ UpdateOne({ k: obj[k] for k in checked_keys},
-                               { '$setOnInsert': obj },
-                               upsert=True) for obj in c]
-        i += len(requests)
-        coll.bulk_write(requests, ordered=False)
-    return i
 
+    return bulk_upsert(coll, results, 500, checked_keys)
 
 mysql_deets = {
     'pass': getenv('MYSQL_PASS'),
@@ -70,7 +73,11 @@ def write(i=2):
     table = mysql_deets['table']
 
     # Get date of the latest message in our DB
-    fr = getenv('DATE_FROM_OVERRIDE') or get_from(collection)
+    override = getenv('DATE_FROM_OVERRIDE')
+    if override:
+        logging.debug('RETRIEVER: Overriding date with: {}'.format(override))
+
+    fr = override or get_from(collection)
 
     # Get messages from Orange DB
     logging.debug('RETRIEVER: Getting messages since {}'.format(fr))
