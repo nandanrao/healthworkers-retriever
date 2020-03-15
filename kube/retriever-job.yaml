@@ -1,0 +1,20 @@
+apiVersion: batch/v1beta1
+kind: CronJob
+metadata:
+  name: hw-retriever
+spec:
+  schedule: "0 0,12 * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+          - name: hw-retriever
+            image: nandanrao/retriever:0.2
+            resources:
+              requests:
+                memory: "800Mi"
+            envFrom:
+            - secretRef:
+                name: hw-retriever-envs
